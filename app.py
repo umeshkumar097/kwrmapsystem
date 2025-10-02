@@ -2,8 +2,8 @@ import streamlit as st
 import mysql.connector
 import pandas as pd
 
-# --- पेज का कॉन्फ़िगरेशन ---
-st.set_page_config(page_title="Plot Status Dashboard", layout="wide")
+# --- पेज का कॉन्फ़िगरेशन (टाइटल यहाँ बदला गया है) ---
+st.set_page_config(page_title="KWR Plot Map", layout="wide")
 
 # --- डेटाबेस कनेक्शन ---
 @st.cache_resource(ttl=600)
@@ -39,8 +39,8 @@ def run_query(query, params):
         finally:
             conn.close()
 
-# --- मुख्य ऐप का UI ---
-st.title("🏡 KWR Plot MAP by Aiclex Technologies")
+# --- मुख्य ऐप का UI (मुख्य हेडिंग यहाँ बदली गई है) ---
+st.title("KWR Plot Map By Aiclex Technologies")
 
 # --- एडमिन लॉगइन (साइडबार में) ---
 st.sidebar.header("🔑 Admin Panel")

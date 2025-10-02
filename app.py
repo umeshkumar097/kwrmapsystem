@@ -18,6 +18,7 @@ a.plot-link { text-decoration: none; }
 </style>
 """, unsafe_allow_html=True)
 
+
 # --- SQLAlchemy डेटाबेस कनेक्शन ---
 @st.cache_resource(ttl=600)
 def init_connection():
@@ -58,7 +59,8 @@ def get_plots_for_project(project_id):
     engine = init_connection()
     if engine:
         with engine.connect() as connection:
-            query = "SELECT id, plot_number, status, customer_name, company_name FROM plots WHERE project_id = :proj_id ORDER BY plot_number;"
+            # --- सिर्फ यह लाइन बदली गई है ---
+            query = text("SELECT id, plot_number, status, customer_name, company_name FROM plots WHERE project_id = :proj_id ORDER BY plot_number;")
             return pd.read_sql(query, connection, params={"proj_id": project_id})
     return pd.DataFrame()
 
@@ -86,7 +88,6 @@ if st.session_state.get('logged_in', False):
     if col1.button("New Project"): st.session_state.show_new_project_dialog = True
     if col2.button("Delete Project", disabled=not selected_project_admin): st.session_state.show_delete_project_dialog = True
 
-    # नया प्रोजेक्ट बनाने के लिए Dialog Box
     if st.session_state.get("show_new_project_dialog", False):
         with st.dialog("Create New Project"):
             new_project_name = st.text_input("Project Name")
@@ -98,10 +99,9 @@ if st.session_state.get('logged_in', False):
                 else:
                     st.warning("Project name is empty or already exists.")
     
-    # प्रोजेक्ट डिलीट करने के लिए कन्फर्मेशन Dialog Box
     if st.session_state.get("show_delete_project_dialog", False):
         with st.dialog("Confirm Deletion"):
-            st.warning(f"Are you sure you want to delete the project '{selected_project_admin}'? All its plots will be deleted forever.")
+            st.warning(f"Are you sure you want to delete '{selected_project_admin}'? All its plots will be deleted forever.")
             if st.button("Yes, Delete Permanently"):
                 project_id_to_delete = project_id_map_admin[selected_project_admin]
                 run_query("DELETE FROM projects WHERE id = :id", {'id': project_id_to_delete})
@@ -116,8 +116,8 @@ if st.session_state.get('logged_in', False):
         plot_numbers_admin = plots_df_admin['plot_number'].tolist() if not plots_df_admin.empty else []
         plot_id_map_admin_plots = pd.Series(plots_df_admin.id.values, index=plots_df_admin.plot_number).to_dict() if not plots_df_admin.empty else {}
 
-        # 1. Update Plot
         with st.sidebar.expander("Update Plot Status", expanded=True):
+            # ... (Update Plot का पूरा कोड यहाँ आएगा, जैसा पहले था) ...
             selected_plot_update = st.selectbox("Select Plot to Update", options=plot_numbers_admin, key="update_select")
             statuses = ["Available", "Booked", "Sold"]
             new_status = st.selectbox("Select New Status", options=statuses)
@@ -133,9 +133,8 @@ if st.session_state.get('logged_in', False):
                     run_query(query, params)
                     st.success("Plot updated!")
                     st.rerun()
-
-        # 2. Add Plot
         with st.sidebar.expander("Add New Plot"):
+            # ... (Add Plot का पूरा कोड यहाँ आएगा, जैसा पहले था) ...
             new_plot_number = st.number_input("Enter New Plot Number", min_value=1, step=1)
             initial_status = st.selectbox("Initial Status", options=statuses, key="add_status")
             if st.button("Add Plot"):
@@ -148,8 +147,8 @@ if st.session_state.get('logged_in', False):
                     st.success(f"Plot {new_plot_number} added!")
                     st.rerun()
 
-        # 3. Delete Plot
         with st.sidebar.expander("Delete Plot"):
+            # ... (Delete Plot का पूरा कोड यहाँ आएगा, जैसा पहले था) ...
             plot_to_delete = st.selectbox("Select Plot to Delete", options=plot_numbers_admin, key="delete_select")
             if st.button("Delete Selected Plot"):
                 if plot_to_delete:
@@ -173,19 +172,19 @@ if not projects_df.empty:
         if plots_df.empty:
             st.info("No plots found for this project.")
         else:
-            # clickable plot के लिए URL param की जगह session_state का इस्तेमाल
-            if 'plot_to_show' not in st.session_state:
-                st.session_state.plot_to_show = None
-
-            cols = st.columns(10) # ग्रिड के लिए 10 कॉलम बनाएं
+            if 'plot_to_show' not in st.session_state: st.session_state.plot_to_show = None
+            
+            # यहाँ ग्रिड बनाने का तरीका बदल दिया गया है ताकि वह st.button के साथ काम करे
+            STATUS_COLORS = {"Available": "#28a745", "Booked": "#ffc107", "Sold": "#dc3545"}
+            cols = st.columns(10)
             for i, row in enumerate(plots_df.itertuples()):
-                with cols[i % 10]:
-                    if st.button(f"**{row.plot_number}**", key=f"plot_{row.id}"):
-                         # क्लिक करने पर plot id को session state में सेव करें
-                        if row.status in ["Booked", "Sold"]:
-                            st.session_state.plot_to_show = row.id
+                color = STATUS_COLORS.get(row.status, "#6c757d")
+                # बटन के रंग के लिए CSS का इस्तेमाल नहीं कर सकते, इसलिए st.button का इस्तेमाल करें
+                if cols[i % 10].button(f"{row.plot_number}", key=f"plot_{row.id}"):
+                    if row.status in ["Booked", "Sold"]:
+                        st.session_state.plot_to_show = row.id
+                        st.rerun()
 
-            # जिसे क्लिक किया गया है, उसका Dialog Box दिखाएं
             if st.session_state.plot_to_show:
                 plot_details = plots_df[plots_df['id'] == st.session_state.plot_to_show].iloc[0]
                 with st.dialog(f"Details for Plot #{plot_details['plot_number']}"):

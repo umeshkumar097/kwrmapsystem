@@ -31,11 +31,10 @@ def init_connection():
         st.error(f"Database Connection Error: {e}")
         return None
 
-# --- डेटाबेस फंक्शन्स (Rollback Error फिक्स के साथ) ---
+# --- डेटाबेस फंक्शन्स ---
 def run_query(query, params=None):
     engine = init_connection()
     if not engine: return False
-
     with engine.connect() as connection:
         try:
             with connection.begin() as trans:
@@ -44,8 +43,6 @@ def run_query(query, params=None):
             return True
         except Exception as e:
             st.error(f"Database Query Error: {e}")
-            # --- यह लाइन जोड़ी गई है ---
-            # एरर आने पर कनेक्शन कैश को पूरी तरह से रीसेट कर दें
             init_connection.clear()
             return False
 
@@ -110,12 +107,20 @@ if st.session_state.get('logged_in', False):
 
 
 # --- यूजर के लिए UI ---
-# ... (यूजर UI का पूरा कोड यहाँ आएगा, इसमें कोई बदलाव नहीं है) ...
 projects_df = get_all_projects()
 if not projects_df.empty:
     project_names = projects_df['name'].tolist()
     project_id_map = pd.Series(projects_df.id.values, index=projects_df.name).to_dict()
     selected_project_name = st.selectbox("Select a Project to View", options=project_names)
+    
+    # --- यहाँ नया लेजेंड (Legend) जोड़ा गया है ---
+    st.markdown("""
+    <div style="display: flex; justify-content: center; align-items: center; gap: 20px; padding: 10px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; margin: 15px 0;">
+        <div style="display: flex; align-items: center;"><div style="width:20px; height:20px; background-color:#28a745; border-radius:3px; margin-right: 8px;"></div><b>Available</b></div>
+        <div style="display: flex; align-items: center;"><div style="width:20px; height:20px; background-color:#ffc107; border-radius:3px; margin-right: 8px;"></div><b>Booked</b></div>
+        <div style="display: flex; align-items: center;"><div style="width:20px; height:20px; background-color:#dc3545; border-radius:3px; margin-right: 8px;"></div><b>Sold</b></div>
+    </div>
+    """, unsafe_allow_html=True)
     
     if selected_project_name:
         selected_project_id = project_id_map[selected_project_name]

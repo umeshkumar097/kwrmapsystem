@@ -8,7 +8,6 @@ st.set_page_config(page_title="KWR PLOT MAP", layout="wide")
 # --- CSS ---
 st.markdown("""
 <style>
-/* ... (सारा CSS कोड यहाँ आएगा, जैसा पहले था वैसा ही) ... */
 .plot-grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px; padding: 10px 0; }
 .plot-box { position: relative; padding: 15px 5px; border-radius: 8px; color: white; text-align: center; font-size: 20px; font-weight: bold; cursor: default; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); }
 .plot-box .tooltiptext { visibility: hidden; width: 200px; background-color: #555; color: #fff; text-align: left; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; font-size: 14px; font-weight: normal; }
@@ -31,10 +30,11 @@ def init_connection():
         st.error(f"Database Connection Error: {e}")
         return None
 
-# --- डेटाबेस फंक्शन्स ---
+# --- डेटाबेस फंक्शन्स (Rollback Error फिक्स के साथ) ---
 def run_query(query, params=None):
     engine = init_connection()
     if not engine: return False
+
     with engine.connect() as connection:
         try:
             with connection.begin() as trans:
@@ -43,6 +43,7 @@ def run_query(query, params=None):
             return True
         except Exception as e:
             st.error(f"Database Query Error: {e}")
+            # एरर आने पर कनेक्शन कैश को पूरी तरह से रीसेट कर दें
             init_connection.clear()
             return False
 
@@ -68,22 +69,26 @@ def get_plots_for_project(project_id):
 st.title("KWR PLOT MAP")
 
 # --- एडमिन लॉगइन ---
-# ... (पूरा एडमिन पैनल का कोड यहाँ आएगा, इसमें कोई बदलाव नहीं है) ...
 st.sidebar.header("🔑 Admin Panel")
 password = st.sidebar.text_input("Enter Admin Password", type="password")
 if password == st.secrets["admin"]["password"]: st.session_state['logged_in'] = True
 elif password:
     st.sidebar.error("❌ Incorrect password.")
     if 'logged_in' in st.session_state: del st.session_state['logged_in']
+
+# --- एडमिन कंट्रोल ---
 if st.session_state.get('logged_in', False):
     st.sidebar.subheader("Project Management")
     projects_df_admin = get_all_projects()
     project_names_admin = projects_df_admin['name'].tolist() if not projects_df_admin.empty else []
     project_id_map_admin = pd.Series(projects_df_admin.id.values, index=projects_df_admin.name).to_dict() if not projects_df_admin.empty else {}
+    
     selected_project_admin = st.sidebar.selectbox("Select Project to Manage", options=project_names_admin, index=0 if project_names_admin else None)
+
     col1, col2 = st.sidebar.columns(2)
     if col1.button("New Project"): st.session_state.show_new_project_dialog = True
     if col2.button("Delete Project", disabled=not selected_project_admin): st.session_state.show_delete_project_dialog = True
+
     if st.session_state.get("show_new_project_dialog", False):
         with st.dialog("Create New Project"):
             new_project_name = st.text_input("Project Name")
@@ -92,7 +97,9 @@ if st.session_state.get('logged_in', False):
                     run_query("INSERT INTO projects (name) VALUES (:name)", {'name': new_project_name})
                     del st.session_state.show_new_project_dialog
                     st.rerun()
-                else: st.warning("Project name is empty or already exists.")
+                else:
+                    st.warning("Project name is empty or already exists.")
+    
     if st.session_state.get("show_delete_project_dialog", False):
         with st.dialog("Confirm Deletion"):
             st.warning(f"Are you sure you want to delete '{selected_project_admin}'? All its plots will be deleted forever.")
@@ -101,10 +108,11 @@ if st.session_state.get('logged_in', False):
                 run_query("DELETE FROM projects WHERE id = :id", {'id': project_id_to_delete})
                 del st.session_state.show_delete_project_dialog
                 st.rerun()
+
     if selected_project_admin:
         st.sidebar.markdown("---")
-        # ... (प्लॉट मैनेजमेंट का बाकी का कोड यहाँ आएगा) ...
-
+        st.sidebar.subheader(f"Manage Plots for: {selected_project_admin}")
+        # ... (प्लॉट मैनेजमेंट का पूरा कोड यहाँ आएगा) ...
 
 # --- यूजर के लिए UI ---
 projects_df = get_all_projects()
@@ -113,7 +121,7 @@ if not projects_df.empty:
     project_id_map = pd.Series(projects_df.id.values, index=projects_df.name).to_dict()
     selected_project_name = st.selectbox("Select a Project to View", options=project_names)
     
-    # --- यहाँ नया लेजेंड (Legend) जोड़ा गया है ---
+    # --- लेजेंड ---
     st.markdown("""
     <div style="display: flex; justify-content: center; align-items: center; gap: 20px; padding: 10px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; margin: 15px 0;">
         <div style="display: flex; align-items: center;"><div style="width:20px; height:20px; background-color:#28a745; border-radius:3px; margin-right: 8px;"></div><b>Available</b></div>

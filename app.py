@@ -8,16 +8,14 @@ st.set_page_config(page_title="KWR PLOT MAP", layout="wide")
 # --- CSS ---
 st.markdown("""
 <style>
-/* ... (सारा CSS कोड यहाँ आएगा, जैसा पहले था वैसा ही) ... */
 .plot-grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 15px; padding: 10px 0; }
-.plot-box { padding: 20px 5px; border-radius: 10px; color: white; text-align: center; font-size: 24px; font-weight: bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); transition: transform 0.2s; cursor: pointer; }
+.plot-box { padding: 20px 5px; border-radius: 10px; color: white; text-align: center; font-size: 24px; font-weight: bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); transition: transform 0.2s; }
 .plot-box:hover { transform: scale(1.05); }
 a.plot-link { text-decoration: none; }
 .footer { text-align: center; padding: 20px 0; color: #888; }
 .footer a { color: #007bff; text-decoration: none; }
 </style>
 """, unsafe_allow_html=True)
-
 
 # --- SQLAlchemy डेटाबेस कनेक्शन ---
 @st.cache_resource(ttl=600)
@@ -59,7 +57,6 @@ def get_plots_for_project(project_id):
     engine = init_connection()
     if engine:
         with engine.connect() as connection:
-            # --- सिर्फ यह लाइन बदली गई है ---
             query = text("SELECT id, plot_number, status, customer_name, company_name FROM plots WHERE project_id = :proj_id ORDER BY plot_number;")
             return pd.read_sql(query, connection, params={"proj_id": project_id})
     return pd.DataFrame()
@@ -77,37 +74,32 @@ elif password:
 
 # --- एडमिन कंट्रोल ---
 if st.session_state.get('logged_in', False):
+    # ... (एडमिन पैनल का पूरा कोड यहाँ आएगा, जैसा पहले था) ...
     st.sidebar.subheader("Project Management")
     projects_df_admin = get_all_projects()
     project_names_admin = projects_df_admin['name'].tolist() if not projects_df_admin.empty else []
     project_id_map_admin = pd.Series(projects_df_admin.id.values, index=projects_df_admin.name).to_dict() if not projects_df_admin.empty else {}
-    
     selected_project_admin = st.sidebar.selectbox("Select Project to Manage", options=project_names_admin, index=0 if project_names_admin else None)
-
     col1, col2 = st.sidebar.columns(2)
     if col1.button("New Project"): st.session_state.show_new_project_dialog = True
     if col2.button("Delete Project", disabled=not selected_project_admin): st.session_state.show_delete_project_dialog = True
-
     if st.session_state.get("show_new_project_dialog", False):
         with st.dialog("Create New Project"):
             new_project_name = st.text_input("Project Name")
             if st.button("Create"):
                 if new_project_name and new_project_name not in project_names_admin:
                     run_query("INSERT INTO projects (name) VALUES (:name)", {'name': new_project_name})
-                    st.session_state.show_new_project_dialog = False
+                    del st.session_state.show_new_project_dialog
                     st.rerun()
-                else:
-                    st.warning("Project name is empty or already exists.")
-    
+                else: st.warning("Project name is empty or already exists.")
     if st.session_state.get("show_delete_project_dialog", False):
         with st.dialog("Confirm Deletion"):
             st.warning(f"Are you sure you want to delete '{selected_project_admin}'? All its plots will be deleted forever.")
             if st.button("Yes, Delete Permanently"):
                 project_id_to_delete = project_id_map_admin[selected_project_admin]
                 run_query("DELETE FROM projects WHERE id = :id", {'id': project_id_to_delete})
-                st.session_state.show_delete_project_dialog = False
+                del st.session_state.show_delete_project_dialog
                 st.rerun()
-
     if selected_project_admin:
         st.sidebar.markdown("---")
         st.sidebar.subheader(f"Manage Plots for: {selected_project_admin}")
@@ -115,9 +107,8 @@ if st.session_state.get('logged_in', False):
         plots_df_admin = get_plots_for_project(selected_project_id_admin)
         plot_numbers_admin = plots_df_admin['plot_number'].tolist() if not plots_df_admin.empty else []
         plot_id_map_admin_plots = pd.Series(plots_df_admin.id.values, index=plots_df_admin.plot_number).to_dict() if not plots_df_admin.empty else {}
-
-        with st.sidebar.expander("Update Plot Status", expanded=True):
-            # ... (Update Plot का पूरा कोड यहाँ आएगा, जैसा पहले था) ...
+        with st.sidebar.expander("Update, Add, or Delete Plots", expanded=True):
+            st.subheader("Update Plot Status")
             selected_plot_update = st.selectbox("Select Plot to Update", options=plot_numbers_admin, key="update_select")
             statuses = ["Available", "Booked", "Sold"]
             new_status = st.selectbox("Select New Status", options=statuses)
@@ -133,8 +124,7 @@ if st.session_state.get('logged_in', False):
                     run_query(query, params)
                     st.success("Plot updated!")
                     st.rerun()
-        with st.sidebar.expander("Add New Plot"):
-            # ... (Add Plot का पूरा कोड यहाँ आएगा, जैसा पहले था) ...
+            st.subheader("Add New Plot")
             new_plot_number = st.number_input("Enter New Plot Number", min_value=1, step=1)
             initial_status = st.selectbox("Initial Status", options=statuses, key="add_status")
             if st.button("Add Plot"):
@@ -146,9 +136,7 @@ if st.session_state.get('logged_in', False):
                     run_query(query, params)
                     st.success(f"Plot {new_plot_number} added!")
                     st.rerun()
-
-        with st.sidebar.expander("Delete Plot"):
-            # ... (Delete Plot का पूरा कोड यहाँ आएगा, जैसा पहले था) ...
+            st.subheader("Delete Plot")
             plot_to_delete = st.selectbox("Select Plot to Delete", options=plot_numbers_admin, key="delete_select")
             if st.button("Delete Selected Plot"):
                 if plot_to_delete:
@@ -172,31 +160,42 @@ if not projects_df.empty:
         if plots_df.empty:
             st.info("No plots found for this project.")
         else:
-            if 'plot_to_show' not in st.session_state: st.session_state.plot_to_show = None
-            
-            # यहाँ ग्रिड बनाने का तरीका बदल दिया गया है ताकि वह st.button के साथ काम करे
+            # --- रंगीन और clickable ग्रिड बनाने का सही तरीका ---
             STATUS_COLORS = {"Available": "#28a745", "Booked": "#ffc107", "Sold": "#dc3545"}
-            cols = st.columns(10)
-            for i, row in enumerate(plots_df.itertuples()):
-                color = STATUS_COLORS.get(row.status, "#6c757d")
-                # बटन के रंग के लिए CSS का इस्तेमाल नहीं कर सकते, इसलिए st.button का इस्तेमाल करें
-                if cols[i % 10].button(f"{row.plot_number}", key=f"plot_{row.id}"):
-                    if row.status in ["Booked", "Sold"]:
-                        st.session_state.plot_to_show = row.id
-                        st.rerun()
+            
+            html_plots = []
+            for index, row in plots_df.iterrows():
+                color = STATUS_COLORS.get(row['status'], "#6c757d")
+                plot_html = f'<div class="plot-box" style="background-color: {color};">{row.plot_number}</div>'
+                
+                # Booked या Sold होने पर ही लिंक बनाएं
+                if row['status'] in ["Booked", "Sold"]:
+                    # URL में plot_id डालें
+                    html_plots.append(f'<a href="?project={selected_project_name}&plot_id={row.id}" class="plot-link">{plot_html}</a>')
+                else:
+                    html_plots.append(plot_html)
+            
+            st.markdown(f'<div class="plot-grid-container">{"".join(html_plots)}</div>', unsafe_allow_html=True)
 
-            if st.session_state.plot_to_show:
-                plot_details = plots_df[plots_df['id'] == st.session_state.plot_to_show].iloc[0]
-                with st.dialog(f"Details for Plot #{plot_details['plot_number']}"):
-                    details_md = f"""
-                    - **Status:** {plot_details['status']}
-                    - **Customer Name:** {plot_details['customer_name'] or 'N/A'}
-                    - **Company Name:** {plot_details['company_name'] or 'N/A'}
-                    """
-                    st.markdown(details_md)
-                    if st.button("Close"):
-                        st.session_state.plot_to_show = None
-                        st.rerun()
+            # --- क्लिक किए गए प्लॉट की जानकारी नीचे दिखाएं ---
+            query_params = st.query_params
+            if "plot_id" in query_params:
+                try:
+                    plot_id_to_show = int(query_params.get("plot_id"))
+                    plot_details = plots_df[plots_df['id'] == plot_id_to_show].iloc[0]
+                    
+                    with st.container(border=True):
+                        st.subheader(f"Details for Plot #{plot_details['plot_number']}")
+                        details_md = f"""
+                        - **Status:** {plot_details['status']}
+                        - **Customer Name:** {plot_details['customer_name'] or 'N/A'}
+                        - **Company Name:** {plot_details['company_name'] or 'N/A'}
+                        """
+                        st.markdown(details_md)
+                        if st.button("Close"):
+                            st.query_params.clear()
+                except (ValueError, IndexError):
+                    pass # अगर गलत plot_id हो तो कुछ न करें
 else:
     st.info("No projects found. Please add a project via the Admin Panel.")
 

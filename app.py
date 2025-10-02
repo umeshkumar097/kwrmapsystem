@@ -121,38 +121,55 @@ if st.session_state.get('logged_in', False):
         plot_id_map_admin_plots = pd.Series(plots_df_admin.id.values, index=plots_df_admin.plot_number).to_dict() if not plots_df_admin.empty else {}
 
         with st.sidebar.expander("Update, Add, or Delete Plots", expanded=True):
+            # --- 1. UPDATE PLOT ---
             st.subheader("Update Plot Status")
             selected_plot_update = st.selectbox("Select Plot to Update", options=plot_numbers_admin, key="update_select")
             statuses = ["Available", "Booked", "Sold"]
             new_status = st.selectbox("Select New Status", options=statuses)
-            customer_name, company_name = "", ""
+            
+            customer_name_update = ""
             if new_status in ["Booked", "Sold"]:
-                customer_name = st.text_input("Customer Name")
-                company_name = st.text_input("Company Name")
+                customer_name_update = st.text_input("Customer Name", key="update_customer_name")
+            
             if st.button("Update Status"):
                 if selected_plot_update:
                     plot_id_to_update = plot_id_map_admin_plots[selected_plot_update]
+                    company_name_update = "KWR GROUP" if new_status in ["Booked", "Sold"] else ""
                     query = "UPDATE plots SET status = :status, customer_name = :c_name, company_name = :co_name WHERE id = :id"
-                    params = {'status': new_status, 'c_name': customer_name, 'co_name': company_name, 'id': plot_id_to_update}
+                    params = {'status': new_status, 'c_name': customer_name_update, 'co_name': company_name_update, 'id': plot_id_to_update}
                     run_query(query, params)
                     st.success("Plot updated!")
                     st.rerun()
             
             st.markdown("---")
+            # --- 2. ADD PLOT ---
             st.subheader("Add New Plot")
             new_plot_number = st.number_input("Enter New Plot Number", min_value=1, step=1)
             initial_status = st.selectbox("Initial Status", options=statuses, key="add_status")
+
+            customer_name_add = ""
+            if initial_status in ["Booked", "Sold"]:
+                customer_name_add = st.text_input("Customer Name", key="add_customer_name")
+
             if st.button("Add Plot"):
                 if new_plot_number in plot_numbers_admin:
                     st.error(f"Plot {new_plot_number} already exists in this project!")
                 else:
-                    query = "INSERT INTO plots (project_id, plot_number, status) VALUES (:proj_id, :p_num, :stat)"
-                    params = {'proj_id': selected_project_id_admin, 'p_num': new_plot_number, 'stat': initial_status}
+                    company_name_add = "KWR GROUP" if initial_status in ["Booked", "Sold"] else None
+                    query = "INSERT INTO plots (project_id, plot_number, status, customer_name, company_name) VALUES (:proj_id, :p_num, :stat, :c_name, :co_name)"
+                    params = {
+                        'proj_id': selected_project_id_admin, 
+                        'p_num': new_plot_number, 
+                        'stat': initial_status,
+                        'c_name': customer_name_add,
+                        'co_name': company_name_add
+                    }
                     run_query(query, params)
                     st.success(f"Plot {new_plot_number} added!")
                     st.rerun()
 
             st.markdown("---")
+            # --- 3. DELETE PLOT ---
             st.subheader("Delete Plot")
             plot_to_delete = st.selectbox("Select Plot to Delete", options=plot_numbers_admin, key="delete_select")
             if st.button("Delete Selected Plot"):

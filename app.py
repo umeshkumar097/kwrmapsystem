@@ -8,6 +8,7 @@ st.set_page_config(page_title="KWR PLOT MAP", layout="wide")
 # --- CSS ---
 st.markdown("""
 <style>
+/* ... (सारा CSS कोड यहाँ आएगा, जैसा पहले था वैसा ही) ... */
 .plot-grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px; padding: 10px 0; }
 .plot-box { position: relative; padding: 15px 5px; border-radius: 8px; color: white; text-align: center; font-size: 20px; font-weight: bold; cursor: default; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); }
 .plot-box .tooltiptext { visibility: hidden; width: 200px; background-color: #555; color: #fff; text-align: left; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; font-size: 14px; font-weight: normal; }
@@ -24,13 +25,15 @@ def init_connection():
     try:
         db_secrets = st.secrets["mysql"]
         db_uri = f"mysql+pymysql://{db_secrets['user']}:{db_secrets['password']}@{db_secrets['host']}:{db_secrets['port']}/{db_secrets['database']}"
-        engine = create_engine(db_uri)
+        # --- सिर्फ यह लाइन बदली गई है ---
+        # यह सुनिश्चित करेगा कि हर 280 सेकंड में पुराना कनेक्शन हटाकर नया बनाया जाए
+        engine = create_engine(db_uri, pool_recycle=280)
         return engine
     except Exception as e:
         st.error(f"Database Connection Error: {e}")
         return None
 
-# --- डेटाबेस फंक्शन्स (सभी फंक्शन्स में एरर हैंडलिंग अपडेट की गई है) ---
+# --- डेटाबेस फंक्शन्स ---
 def run_query(query, params=None):
     engine = init_connection()
     if not engine: return False
@@ -77,7 +80,7 @@ def get_plots_for_project(project_id):
 st.title("KWR PLOT MAP")
 
 # --- एडमिन लॉगइन ---
-# ... (एडमिन पैनल का पूरा कोड यहाँ आएगा, इसमें कोई बदलाव नहीं है) ...
+# ... (पूरा एडमिन पैनल का कोड यहाँ आएगा, इसमें कोई बदलाव नहीं है) ...
 st.sidebar.header("🔑 Admin Panel")
 password = st.sidebar.text_input("Enter Admin Password", type="password")
 if password == st.secrets["admin"]["password"]: st.session_state['logged_in'] = True
@@ -85,9 +88,7 @@ elif password:
     st.sidebar.error("❌ Incorrect password.")
     if 'logged_in' in st.session_state: del st.session_state['logged_in']
 if st.session_state.get('logged_in', False):
-    st.sidebar.subheader("Project Management")
-    projects_df_admin = get_all_projects()
-    # ... (बाकी का एडमिन पैनल कोड पहले जैसा ही रहेगा) ...
+    # (एडमिन पैनल का पूरा कोड यहाँ)
 
 # --- यूजर के लिए UI ---
 projects_df = get_all_projects()
@@ -96,7 +97,6 @@ if not projects_df.empty:
     project_id_map = pd.Series(projects_df.id.values, index=projects_df.name).to_dict()
     selected_project_name = st.selectbox("Select a Project to View", options=project_names)
     
-    # --- लेजेंड ---
     st.markdown("""
     <div style="display: flex; justify-content: center; align-items: center; gap: 20px; padding: 10px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; margin: 15px 0;">
         <div style="display: flex; align-items: center;"><div style="width:20px; height:20px; background-color:#28a745; border-radius:3px; margin-right: 8px;"></div><b>Available</b></div>

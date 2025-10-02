@@ -6,21 +6,28 @@ from sqlalchemy import create_engine, text
 st.set_page_config(page_title="KWR Plot Map", layout="wide")
 
 # --- Responsive Grid के लिए CSS ---
+# यह CSS सुनिश्चित करेगा कि ग्रिड सभी डिवाइस पर अच्छा दिखे
 st.markdown("""
 <style>
-.plot-grid {
+.plot-grid-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
     gap: 15px;
+    padding: 10px;
 }
 .plot-box {
-    padding: 20px;
+    padding: 20px 5px; /* ऊपर-नीचे ज़्यादा, दाएं-बाएं कम padding */
     border-radius: 10px;
     color: white;
     text-align: center;
     font-size: 24px;
     font-weight: bold;
-    cursor: pointer; /* ताकि पता चले कि इस पर hover कर सकते हैं */
+    cursor: pointer;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+}
+.plot-box:hover {
+    transform: scale(1.05); /* Hover पर थोड़ा बड़ा दिखेगा */
 }
 </style>
 """, unsafe_allow_html=True)
@@ -45,7 +52,6 @@ def get_all_plots():
     if engine:
         try:
             with engine.connect() as connection:
-                # अब नए कॉलम भी fetch करें
                 query = "SELECT id, plot_number, status, customer_name, company_name FROM plots ORDER BY plot_number;"
                 df = pd.read_sql(query, connection)
                 return df
@@ -68,6 +74,7 @@ def run_query(query, params=None):
 st.title("KWR Plot Map By Aiclex Technologies")
 
 # --- एडमिन लॉगइन (साइडबार में) ---
+# ... (एडमिन पैनल का पूरा कोड यहाँ आएगा, जैसा पहले था वैसा ही) ...
 st.sidebar.header("🔑 Admin Panel")
 password = st.sidebar.text_input("Enter Admin Password", type="password")
 
@@ -91,7 +98,6 @@ if st.session_state.get('logged_in', False):
     statuses = ["Available", "Booked", "Sold"]
     new_status = st.sidebar.selectbox("Select New Status", options=statuses)
     
-    # ग्राहक और कंपनी की जानकारी के लिए नए फील्ड्स
     customer_name = ""
     company_name = ""
     if new_status in ["Booked", "Sold"]:
@@ -110,7 +116,25 @@ if st.session_state.get('logged_in', False):
 
     # 2. नया प्लॉट जोड़ें
     st.sidebar.subheader("Add New Plot")
-    # ... (Add Plot और Delete Plot का कोड पहले जैसा ही रहेगा) ...
+    new_plot_number = st.sidebar.number_input("Enter New Plot Number", min_value=1, step=1)
+    initial_status = st.sidebar.selectbox("Initial Status", options=statuses, key="add_status")
+    if st.sidebar.button("Add Plot"):
+        if new_plot_number in plot_numbers:
+            st.sidebar.error(f"Plot {new_plot_number} already exists!")
+        else:
+            run_query("INSERT INTO plots (plot_number, status) VALUES (:plot, :status)", {'plot': new_plot_number, 'status': initial_status})
+            st.sidebar.success(f"Plot {new_plot_number} added successfully!")
+            st.rerun()
+
+    # 3. प्लॉट डिलीट करें
+    st.sidebar.subheader("Delete Plot")
+    plot_to_delete = st.sidebar.selectbox("Select Plot to Delete", options=plot_numbers, key="delete_select")
+    if st.sidebar.button("Delete Plot"):
+        if plot_to_delete:
+            plot_id_to_delete = plot_id_map[plot_to_delete]
+            run_query("DELETE FROM plots WHERE id = :id", {'id': plot_id_to_delete})
+            st.sidebar.warning(f"Plot {plot_to_delete} has been deleted.")
+            st.rerun()
 
 # --- प्लॉट्स को ग्रिड में दिखाएं ---
 st.subheader("Current Plot Availability")
@@ -121,15 +145,13 @@ if plots_df.empty and not st.session_state.get('logged_in', False):
 else:
     STATUS_COLORS = {"Available": "#28a745", "Booked": "#ffc107", "Sold": "#dc3545"}
     
-    # Responsive Grid के लिए HTML container शुरू करें
-    st.markdown('<div class="plot-grid">', unsafe_allow_html=True)
-
+    # सभी प्लॉट्स के लिए एक ही बार में HTML स्ट्रिंग बनाएं
+    html_plots = []
     for index, row in plots_df.iterrows():
-        plot_number = row['plot_number']
-        status = row['status']
+        plot_number, status = row['plot_number'], row['status']
         color = STATUS_COLORS.get(status, "#6c757d")
         
-        # Tooltip के लिए टेक्स्ट बनाएं
+        # Tooltip के लिए टेक्स्ट
         tooltip_text = ""
         if status in ["Booked", "Sold"]:
             c_name = row['customer_name'] or ""
@@ -138,14 +160,10 @@ else:
             if c_name: details.append(f"Name: {c_name}")
             if co_name: details.append(f"Company: {co_name}")
             tooltip_text = "\n".join(details)
-            if not tooltip_text: tooltip_text = f"Status: {status}" # अगर नाम खाली हो तो
+            if not tooltip_text: tooltip_text = f"Status: {status}"
 
-        # HTML और CSS का इस्तेमाल करके बॉक्स बनाएं
-        st.markdown(f"""
-        <div class="plot-box" style="background-color: {color};" title="{tooltip_text}">
-            {plot_number}
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # HTML container बंद करें
-    st.markdown('</div>', unsafe_allow_html=True)
+        # हर एक प्लॉट के लिए HTML बनाएं
+        html_plots.append(f'<div class="plot-box" style="background-color: {color};" title="{tooltip_text}">{plot_number}</div>')
+
+    # पूरे ग्रिड को एक साथ रेंडर करें
+    st.markdown(f'<div class="plot-grid-container">{"".join(html_plots)}</div>', unsafe_allow_html=True)

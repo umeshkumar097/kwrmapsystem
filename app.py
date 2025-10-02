@@ -40,7 +40,7 @@ def run_query(query, params):
             conn.close()
 
 # --- मुख्य ऐप का UI ---
-st.title("🏡 Real Estate Plot Status Dashboard")
+st.title("🏡 KWR Plot MAP by Aiclex Technologies")
 
 # --- एडमिन लॉगइन (साइडबार में) ---
 st.sidebar.header("🔑 Admin Panel")

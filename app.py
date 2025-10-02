@@ -3,31 +3,42 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 # --- पेज का कॉन्फ़िगरेशन ---
-st.set_page_config(page_title="KWR Plot Map", layout="wide")
+# ब्राउज़र टैब का टाइटल यहाँ सेट होता है
+st.set_page_config(page_title="KWR PLOT MAP", layout="wide")
 
-# --- Responsive Grid के लिए CSS ---
-# यह CSS सुनिश्चित करेगा कि ग्रिड सभी डिवाइस पर अच्छा दिखे
+# --- Responsive Grid और Footer के लिए CSS ---
 st.markdown("""
 <style>
 .plot-grid-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
     gap: 15px;
-    padding: 10px;
+    padding: 10px 0;
 }
 .plot-box {
-    padding: 20px 5px; /* ऊपर-नीचे ज़्यादा, दाएं-बाएं कम padding */
+    padding: 20px 5px;
     border-radius: 10px;
     color: white;
     text-align: center;
     font-size: 24px;
     font-weight: bold;
-    cursor: pointer;
     box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
     transition: transform 0.2s;
 }
 .plot-box:hover {
-    transform: scale(1.05); /* Hover पर थोड़ा बड़ा दिखेगा */
+    transform: scale(1.05);
+}
+a.plot-link {
+    text-decoration: none;
+}
+.footer {
+    text-align: center;
+    padding: 20px 0;
+    color: #888;
+}
+.footer a {
+    color: #007bff;
+    text-decoration: none;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -71,7 +82,8 @@ def run_query(query, params=None):
             st.error(f"Database Query Error: {e}")
 
 # --- मुख्य ऐप का UI ---
-st.title("KWR Plot Map By Aiclex Technologies")
+# 1. मुख्य टाइटल यहाँ बदला गया है
+st.title("KWR PLOT MAP")
 
 # --- एडमिन लॉगइन (साइडबार में) ---
 # ... (एडमिन पैनल का पूरा कोड यहाँ आएगा, जैसा पहले था वैसा ही) ...
@@ -86,25 +98,20 @@ elif password:
     if 'logged_in' in st.session_state:
         del st.session_state['logged_in']
 
-# --- एडमिन कंट्रोल ---
 if st.session_state.get('logged_in', False):
-    plots_df = get_all_plots()
-    plot_numbers = plots_df['plot_number'].tolist() if not plots_df.empty else []
-    plot_id_map = pd.Series(plots_df.id.values, index=plots_df.plot_number).to_dict() if not plots_df.empty else {}
-
-    # 1. स्टेटस अपडेट करें
+    plots_df_admin = get_all_plots()
+    plot_numbers = plots_df_admin['plot_number'].tolist() if not plots_df_admin.empty else []
+    plot_id_map = pd.Series(plots_df_admin.id.values, index=plots_df_admin.plot_number).to_dict() if not plots_df_admin.empty else {}
     st.sidebar.subheader("Update Plot Status")
     selected_plot_update = st.sidebar.selectbox("Select Plot to Update", options=plot_numbers, key="update_select")
     statuses = ["Available", "Booked", "Sold"]
     new_status = st.sidebar.selectbox("Select New Status", options=statuses)
-    
     customer_name = ""
     company_name = ""
     if new_status in ["Booked", "Sold"]:
         st.sidebar.write("Enter Customer Details (Optional)")
         customer_name = st.sidebar.text_input("Customer Name")
         company_name = st.sidebar.text_input("Company Name")
-
     if st.sidebar.button("Update Status"):
         if selected_plot_update:
             plot_id_to_update = plot_id_map[selected_plot_update]
@@ -114,56 +121,40 @@ if st.session_state.get('logged_in', False):
             st.sidebar.success(f"Plot {selected_plot_update} updated!")
             st.rerun()
 
-    # 2. नया प्लॉट जोड़ें
-    st.sidebar.subheader("Add New Plot")
-    new_plot_number = st.sidebar.number_input("Enter New Plot Number", min_value=1, step=1)
-    initial_status = st.sidebar.selectbox("Initial Status", options=statuses, key="add_status")
-    if st.sidebar.button("Add Plot"):
-        if new_plot_number in plot_numbers:
-            st.sidebar.error(f"Plot {new_plot_number} already exists!")
-        else:
-            run_query("INSERT INTO plots (plot_number, status) VALUES (:plot, :status)", {'plot': new_plot_number, 'status': initial_status})
-            st.sidebar.success(f"Plot {new_plot_number} added successfully!")
-            st.rerun()
-
-    # 3. प्लॉट डिलीट करें
-    st.sidebar.subheader("Delete Plot")
-    plot_to_delete = st.sidebar.selectbox("Select Plot to Delete", options=plot_numbers, key="delete_select")
-    if st.sidebar.button("Delete Plot"):
-        if plot_to_delete:
-            plot_id_to_delete = plot_id_map[plot_to_delete]
-            run_query("DELETE FROM plots WHERE id = :id", {'id': plot_id_to_delete})
-            st.sidebar.warning(f"Plot {plot_to_delete} has been deleted.")
-            st.rerun()
-
 # --- प्लॉट्स को ग्रिड में दिखाएं ---
 st.subheader("Current Plot Availability")
+clicked_plot_number_str = st.query_params.get("plot", [None])[0]
 plots_df = get_all_plots()
 
 if plots_df.empty and not st.session_state.get('logged_in', False):
     st.warning("Could not load plot data.")
 else:
     STATUS_COLORS = {"Available": "#28a745", "Booked": "#ffc107", "Sold": "#dc3545"}
-    
-    # सभी प्लॉट्स के लिए एक ही बार में HTML स्ट्रिंग बनाएं
     html_plots = []
     for index, row in plots_df.iterrows():
         plot_number, status = row['plot_number'], row['status']
         color = STATUS_COLORS.get(status, "#6c757d")
-        
-        # Tooltip के लिए टेक्स्ट
-        tooltip_text = ""
+        plot_html = f'<div class="plot-box" style="background-color: {color};">{plot_number}</div>'
         if status in ["Booked", "Sold"]:
-            c_name = row['customer_name'] or ""
-            co_name = row['company_name'] or ""
-            details = []
-            if c_name: details.append(f"Name: {c_name}")
-            if co_name: details.append(f"Company: {co_name}")
-            tooltip_text = "\n".join(details)
-            if not tooltip_text: tooltip_text = f"Status: {status}"
-
-        # हर एक प्लॉट के लिए HTML बनाएं
-        html_plots.append(f'<div class="plot-box" style="background-color: {color};" title="{tooltip_text}">{plot_number}</div>')
-
-    # पूरे ग्रिड को एक साथ रेंडर करें
+             html_plots.append(f'<a href="?plot={plot_number}" class="plot-link">{plot_html}</a>')
+        else:
+            html_plots.append(plot_html)
     st.markdown(f'<div class="plot-grid-container">{"".join(html_plots)}</div>', unsafe_allow_html=True)
+    
+    if clicked_plot_number_str:
+        try:
+            clicked_plot_number = int(clicked_plot_number_str)
+            plot_details = plots_df[plots_df['plot_number'] == clicked_plot_number].iloc[0]
+            st.subheader(f"Details for Plot #{plot_details['plot_number']}")
+            details_md = f"""
+            - **Status:** {plot_details['status']}
+            - **Customer Name:** {plot_details['customer_name'] or 'N/A'}
+            - **Company Name:** {plot_details['company_name'] or 'N/A'}
+            """
+            st.info(details_md)
+        except (ValueError, IndexError):
+            pass
+
+# --- 2. फुटर यहाँ जोड़ा गया है ---
+st.markdown("---")
+st.markdown('<div class="footer">BUILD BY <a href="http://www.aiclex.in" target="_blank">AICLEX TECHNOLOGIES</a></div>', unsafe_allow_html=True)

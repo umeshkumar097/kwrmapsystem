@@ -1,45 +1,51 @@
 import streamlit as st
-import mysql.connector
 import pandas as pd
+from sqlalchemy import create_engine, text
 
-# --- पेज का कॉन्फ़िगरेशन (टाइटल यहाँ बदला गया है) ---
+# --- पेज का कॉन्फ़िगरेशन ---
 st.set_page_config(page_title="KWR Plot Map", layout="wide")
 
-# --- डेटाबेस कनेक्शन ---
+# --- SQLAlchemy डेटाबेस कनेक्शन ---
 @st.cache_resource(ttl=600)
 def init_connection():
     try:
-        # 20 सेकंड का कनेक्शन टाइमआउट जोड़ा गया है
-        return mysql.connector.connect(**st.secrets["mysql"], connection_timeout=20)
-    except mysql.connector.Error as e:
-        # यह एरर अब तुरंत दिखेगा, जिससे पता चलेगा कि कनेक्शन में क्या दिक्कत है
-        st.error(f"Database Connection Error: {e}. Please check your credentials and Hostinger's remote access settings.")
+        # secrets.toml से जानकारी लेकर एक कनेक्शन स्ट्रिंग बनाएं
+        db_secrets = st.secrets["mysql"]
+        db_uri = f"mysql+pymysql://{db_secrets['user']}:{db_secrets['password']}@{db_secrets['host']}:{db_secrets['port']}/{db_secrets['database']}"
+        
+        # SQLAlchemy इंजन बनाएं
+        engine = create_engine(db_uri)
+        return engine
+    except Exception as e:
+        st.error(f"Database Connection Error using SQLAlchemy: {e}")
         return None
 
 # --- डेटाबेस फंक्शन्स ---
 @st.cache_data(ttl=60)
 def get_all_plots():
-    conn = init_connection()
-    if conn and conn.is_connected():
-        df = pd.read_sql("SELECT id, plot_number, status FROM plots ORDER BY plot_number;", conn)
-        conn.close()
-        return df
+    engine = init_connection()
+    if engine:
+        try:
+            # SQLAlchemy इंजन सीधे pandas के साथ काम करता है
+            with engine.connect() as connection:
+                df = pd.read_sql("SELECT id, plot_number, status FROM plots ORDER BY plot_number;", connection)
+                return df
+        except Exception as e:
+            st.error(f"Error fetching data: {e}")
     return pd.DataFrame()
 
-def run_query(query, params):
-    conn = init_connection()
-    if conn and conn.is_connected():
+def run_query(query, params=None):
+    engine = init_connection()
+    if engine:
         try:
-            with conn.cursor() as cur:
-                cur.execute(query, params)
-                conn.commit()
+            with engine.connect() as connection:
+                connection.execute(text(query), params)
+                connection.commit() # SQLAlchemy 1.4+ में commit() की जरूरत होती है
             st.cache_data.clear() # डेटा बदलने के बाद कैश क्लियर करें
-        except mysql.connector.Error as e:
+        except Exception as e:
             st.error(f"Database Query Error: {e}")
-        finally:
-            conn.close()
 
-# --- मुख्य ऐप का UI (मुख्य हेडिंग यहाँ बदली गई है) ---
+# --- मुख्य ऐप का UI ---
 st.title("KWR Plot Map By Aiclex Technologies")
 
 # --- एडमिन लॉगइन (साइडबार में) ---
@@ -56,16 +62,11 @@ elif password:
 
 # --- एडमिन कंट्रोल ---
 if st.session_state.get('logged_in', False):
-    
     plots_df = get_all_plots()
-    if not plots_df.empty:
-        plot_numbers = plots_df['plot_number'].tolist()
-        plot_id_map = pd.Series(plots_df.id.values, index=plots_df.plot_number).to_dict()
-    else:
-        plot_numbers = []
-        plot_id_map = {}
+    plot_numbers = plots_df['plot_number'].tolist() if not plots_df.empty else []
+    plot_id_map = pd.Series(plots_df.id.values, index=plots_df.plot_number).to_dict() if not plots_df.empty else {}
 
-    # --- 1. स्टेटस अपडेट करें ---
+    # 1. स्टेटस अपडेट करें
     st.sidebar.subheader("Update Plot Status")
     selected_plot_update = st.sidebar.selectbox("Select Plot to Update", options=plot_numbers, key="update_select")
     statuses = ["Available", "Booked", "Sold"]
@@ -73,11 +74,11 @@ if st.session_state.get('logged_in', False):
     if st.sidebar.button("Update Status"):
         if selected_plot_update:
             plot_id_to_update = plot_id_map[selected_plot_update]
-            run_query("UPDATE plots SET status = %s WHERE id = %s", (new_status, plot_id_to_update))
+            run_query("UPDATE plots SET status = :status WHERE id = :id", {'status': new_status, 'id': plot_id_to_update})
             st.sidebar.success(f"Plot {selected_plot_update} updated to {new_status}!")
             st.experimental_rerun()
 
-    # --- 2. नया प्लॉट जोड़ें ---
+    # 2. नया प्लॉट जोड़ें
     st.sidebar.subheader("Add New Plot")
     new_plot_number = st.sidebar.number_input("Enter New Plot Number", min_value=1, step=1)
     initial_status = st.sidebar.selectbox("Initial Status", options=statuses, key="add_status")
@@ -85,17 +86,17 @@ if st.session_state.get('logged_in', False):
         if new_plot_number in plot_numbers:
             st.sidebar.error(f"Plot {new_plot_number} already exists!")
         else:
-            run_query("INSERT INTO plots (plot_number, status) VALUES (%s, %s)", (new_plot_number, initial_status))
+            run_query("INSERT INTO plots (plot_number, status) VALUES (:plot, :status)", {'plot': new_plot_number, 'status': initial_status})
             st.sidebar.success(f"Plot {new_plot_number} added successfully!")
             st.experimental_rerun()
 
-    # --- 3. प्लॉट डिलीट करें ---
+    # 3. प्लॉट डिलीट करें
     st.sidebar.subheader("Delete Plot")
     plot_to_delete = st.sidebar.selectbox("Select Plot to Delete", options=plot_numbers, key="delete_select")
     if st.sidebar.button("Delete Plot"):
         if plot_to_delete:
             plot_id_to_delete = plot_id_map[plot_to_delete]
-            run_query("DELETE FROM plots WHERE id = %s", (plot_id_to_delete,))
+            run_query("DELETE FROM plots WHERE id = :id", {'id': plot_id_to_delete})
             st.sidebar.warning(f"Plot {plot_to_delete} has been deleted.")
             st.experimental_rerun()
 
@@ -104,7 +105,7 @@ st.subheader("Current Plot Availability")
 plots_df = get_all_plots()
 
 if plots_df.empty and not st.session_state.get('logged_in', False):
-    st.warning("Could not load plot data. Please try again later.")
+    st.warning("Could not load plot data. Check connection or if plots exist.")
 else:
     STATUS_COLORS = {"Available": "#28a745", "Booked": "#ffc107", "Sold": "#dc3545"}
     cols_per_row = 10

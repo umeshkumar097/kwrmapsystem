@@ -2,41 +2,65 @@ import streamlit as st
 import psycopg2
 import pandas as pd
 
-# --- पेज कॉन्फ़िगरेशन ---
+# --- पेज का कॉन्फ़िगरेशन (सबसे पहली कमांड होनी चाहिए) ---
 st.set_page_config(page_title="Plot Status Dashboard", layout="wide")
 
 # --- डेटाबेस कनेक्शन ---
 # st.cache_resource का उपयोग करके कनेक्शन को कैश करें ताकि ऐप बार-बार कनेक्ट न हो
 @st.cache_resource
 def init_connection():
+    """
+    Connects to the PostgreSQL database using credentials from st.secrets.
+    Returns the connection object.
+    """
     try:
         return psycopg2.connect(**st.secrets["postgres"])
     except psycopg2.OperationalError as e:
-        st.error(f"Error connecting to database: {e}")
+        st.error(f"Error: Could not connect to the database. Please check your secrets.toml file. Details: {e}")
+        return None
+    except Exception as e:
+        st.error(f"An unexpected error occurred during connection: {e}")
         return None
 
 # --- डेटाबेस से डेटा लाने और अपडेट करने के लिए फंक्शन्स ---
+# st.cache_data का उपयोग करके डेटा को कैश करें ताकि बार-बार डेटाबेस से न पूछना पड़े
 @st.cache_data(ttl=60) # डेटा को 60 सेकंड के लिए कैश करें
 def get_all_plots():
+    """
+    Fetches all plot data from the database and returns it as a Pandas DataFrame.
+    """
     conn = init_connection()
     if conn:
-        df = pd.read_sql("SELECT id, plot_number, status FROM plots ORDER BY plot_number;", conn)
-        return df
-    return pd.DataFrame()
+        try:
+            df = pd.read_sql("SELECT id, plot_number, status FROM plots ORDER BY plot_number;", conn)
+            return df
+        except Exception as e:
+            st.error(f"Error fetching data from the database: {e}")
+    return pd.DataFrame() # अगर कोई एरर हो तो खाली DataFrame भेजें
 
 def update_plot_status(plot_id, status):
+    """
+    Updates the status of a specific plot in the database.
+    """
     conn = init_connection()
     if conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE plots SET status = %s WHERE id = %s", (status, plot_id))
-            conn.commit()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE plots SET status = %s WHERE id = %s", (status, plot_id))
+                conn.commit()
+            # अपडेट के बाद कैश क्लियर करें ताकि बदलाव तुरंत दिखे
+            st.cache_data.clear()
+        except Exception as e:
+            st.error(f"Error updating data: {e}")
 
-# --- मुख्य ऐप ---
+
+# --- मुख्य ऐप का UI और लॉजिक ---
+
 st.title("🏡 Real Estate Plot Status Dashboard")
 
 # --- एडमिन लॉगइन (साइडबार में) ---
 st.sidebar.header("🔑 Admin Panel")
-password = st.sidebar.text_input("Enter Password", type="password")
+password = st.sidebar.text_input("Enter Admin Password", type="password")
 
 # पासवर्ड की जाँच करें
 if password == st.secrets["admin"]["password"]:
@@ -44,7 +68,9 @@ if password == st.secrets["admin"]["password"]:
     st.sidebar.success("✅ Logged in successfully!")
 elif password: # अगर कुछ लिखा है लेकिन गलत है
     st.sidebar.error("❌ Incorrect password.")
-    st.session_state.pop('logged_in', None)
+    # अगर गलत पासवर्ड डाला है तो लॉगआउट कर दें
+    if 'logged_in' in st.session_state:
+        del st.session_state['logged_in']
 
 # --- एडमिन कंट्रोल (अगर लॉग इन है तो दिखाएं) ---
 if st.session_state.get('logged_in', False):
@@ -52,11 +78,10 @@ if st.session_state.get('logged_in', False):
     
     plots_df = get_all_plots()
     if not plots_df.empty:
-        plot_numbers = plots_df['plot_number'].tolist()
-        
-        # प्लॉट नंबर को id से मैप करें
-        plot_id_map = {row['plot_number']: row['id'] for index, row in plots_df.iterrows()}
+        # प्लॉट नंबर को id से मैप करें ताकि अपडेट करना आसान हो
+        plot_id_map = pd.Series(plots_df.id.values, index=plots_df.plot_number).to_dict()
 
+        plot_numbers = plots_df['plot_number'].tolist()
         selected_plot_number = st.sidebar.selectbox("Select Plot Number", options=plot_numbers)
         
         statuses = ["Available", "Booked", "Sold"]
@@ -65,16 +90,16 @@ if st.session_state.get('logged_in', False):
         if st.sidebar.button("Update Status"):
             plot_id_to_update = plot_id_map[selected_plot_number]
             update_plot_status(plot_id_to_update, new_status)
-            st.cache_data.clear() # अपडेट के बाद कैश क्लियर करें
             st.sidebar.success(f"Plot {selected_plot_number} status updated to {new_status}!")
-            st.experimental_rerun() # पेज को तुरंत री-रन करें ताकि बदलाव दिखे
+            # पेज को तुरंत री-रन करें ताकि बदलाव दिखे
+            st.experimental_rerun()
 
 # --- सभी प्लॉट्स को ग्रिड में दिखाएं ---
 st.subheader("Current Plot Availability")
 plots_df = get_all_plots()
 
 if plots_df.empty:
-    st.warning("No plots found in the database. Please check the database connection and setup.")
+    st.warning("Could not load plot data. Please check the database connection and ensure the 'plots' table exists.")
 else:
     # स्टेटस के लिए रंग
     STATUS_COLORS = {

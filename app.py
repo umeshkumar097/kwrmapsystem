@@ -8,7 +8,7 @@ st.set_page_config(page_title="KWR Plot Map", layout="wide")
 # --- SQLAlchemy डेटाबेस कनेक्शन ---
 @st.cache_resource(ttl=600)
 def init_connection():
-    try:
+    try
         # secrets.toml से जानकारी लेकर एक कनेक्शन स्ट्रिंग बनाएं
         db_secrets = st.secrets["mysql"]
         db_uri = f"mysql+pymysql://{db_secrets['user']}:{db_secrets['password']}@{db_secrets['host']}:{db_secrets['port']}/{db_secrets['database']}"
@@ -25,7 +25,7 @@ def init_connection():
 def get_all_plots():
     engine = init_connection()
     if engine:
-        try:
+        try
             # SQLAlchemy इंजन सीधे pandas के साथ काम करता है
             with engine.connect() as connection:
                 df = pd.read_sql("SELECT id, plot_number, status FROM plots ORDER BY plot_number;", connection)
@@ -37,11 +37,11 @@ def get_all_plots():
 def run_query(query, params=None):
     engine = init_connection()
     if engine:
-        try:
+        try
             with engine.connect() as connection:
                 connection.execute(text(query), params)
-                connection.commit() # SQLAlchemy 1.4+ में commit() की जरूरत होती है
-            st.cache_data.clear() # डेटा बदलने के बाद कैश क्लियर करें
+                connection.commit()
+            st.cache_data.clear()
         except Exception as e:
             st.error(f"Database Query Error: {e}")
 
@@ -76,7 +76,7 @@ if st.session_state.get('logged_in', False):
             plot_id_to_update = plot_id_map[selected_plot_update]
             run_query("UPDATE plots SET status = :status WHERE id = :id", {'status': new_status, 'id': plot_id_to_update})
             st.sidebar.success(f"Plot {selected_plot_update} updated to {new_status}!")
-            st.experimental_rerun()
+            st.rerun() # बदला हुआ कोड
 
     # 2. नया प्लॉट जोड़ें
     st.sidebar.subheader("Add New Plot")
@@ -88,7 +88,7 @@ if st.session_state.get('logged_in', False):
         else:
             run_query("INSERT INTO plots (plot_number, status) VALUES (:plot, :status)", {'plot': new_plot_number, 'status': initial_status})
             st.sidebar.success(f"Plot {new_plot_number} added successfully!")
-            st.experimental_rerun()
+            st.rerun() # बदला हुआ कोड
 
     # 3. प्लॉट डिलीट करें
     st.sidebar.subheader("Delete Plot")
@@ -98,7 +98,7 @@ if st.session_state.get('logged_in', False):
             plot_id_to_delete = plot_id_map[plot_to_delete]
             run_query("DELETE FROM plots WHERE id = :id", {'id': plot_id_to_delete})
             st.sidebar.warning(f"Plot {plot_to_delete} has been deleted.")
-            st.experimental_rerun()
+            st.rerun() # बदला हुआ कोड
 
 # --- प्लॉट्स को ग्रिड में दिखाएं ---
 st.subheader("Current Plot Availability")

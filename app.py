@@ -84,7 +84,7 @@ elif password:
     st.sidebar.error("❌ Incorrect password.")
     if 'logged_in' in st.session_state: del st.session_state['logged_in']
 
-# --- एडमिन कंट्रोल (पूरा कोड) ---
+# --- एडमिन कंट्रोल ---
 if st.session_state.get('logged_in', False):
     st.sidebar.subheader("Project Management")
     projects_df_admin = get_all_projects()

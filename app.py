@@ -195,7 +195,7 @@ else:
                 st.info("No users registered yet.")
 
         st.sidebar.markdown("---")
-        st.sidebar.subheader("Project & Plot Management")
+        st.sidebar.subheader("Project Management")
         projects_df_admin = get_all_projects()
         project_names_admin = projects_df_admin['name'].tolist() if not projects_df_admin.empty else []
         project_id_map_admin = pd.Series(projects_df_admin.id.values, index=projects_df_admin.name).to_dict() if not projects_df_admin.empty else {}
@@ -218,11 +218,60 @@ else:
                     st.success(f"Project '{project_to_delete_name}' deleted.")
                     st.rerun()
 
+        st.sidebar.markdown("---")
         selected_project_admin = st.sidebar.selectbox("Select Project to Manage Plots", options=project_names_admin, index=0 if project_names_admin else None)
         if selected_project_admin:
-            st.sidebar.markdown("---")
             st.sidebar.subheader(f"Manage Plots for: {selected_project_admin}")
-            # ... (Plot management code yahan aayega) ...
+            selected_project_id_admin = project_id_map_admin[selected_project_admin]
+            plots_df_admin = get_plots_for_project(selected_project_id_admin)
+            plot_numbers_admin = plots_df_admin['plot_number'].tolist() if not plots_df_admin.empty else []
+            plot_id_map_admin_plots = pd.Series(plots_df_admin.id.values, index=plots_df_admin.plot_number).to_dict() if not plots_df_admin.empty else {}
+
+            with st.sidebar.expander("Update, Add, or Delete Plots", expanded=True):
+                st.subheader("Update Plot Status")
+                selected_plot_update = st.selectbox("Select Plot to Update", options=plot_numbers_admin, key="update_select")
+                statuses = ["Available", "Booked", "Sold"]
+                new_status = st.selectbox("Select New Status", options=statuses)
+                customer_name_update = ""
+                if new_status in ["Booked", "Sold"]:
+                    customer_name_update = st.text_input("Customer Name", key="update_customer_name")
+                if st.button("Update Status"):
+                    if selected_plot_update:
+                        plot_id_to_update = plot_id_map_admin_plots[selected_plot_update]
+                        company_name_update = "KWR GROUP" if new_status in ["Booked", "Sold"] else ""
+                        query = "UPDATE plots SET status = :status, customer_name = :c_name, company_name = :co_name WHERE id = :id"
+                        params = {'status': new_status, 'c_name': customer_name_update, 'co_name': company_name_update, 'id': plot_id_to_update}
+                        run_query(query, params)
+                        st.success("Plot updated!")
+                        st.rerun()
+                
+                st.markdown("---")
+                st.subheader("Add New Plot")
+                new_plot_number = st.number_input("Enter New Plot Number", min_value=1, step=1)
+                initial_status = st.selectbox("Initial Status", options=statuses, key="add_status")
+                customer_name_add = ""
+                if initial_status in ["Booked", "Sold"]:
+                    customer_name_add = st.text_input("Customer Name", key="add_customer_name")
+                if st.button("Add Plot"):
+                    if new_plot_number in plot_numbers_admin:
+                        st.error(f"Plot {new_plot_number} already exists in this project!")
+                    else:
+                        company_name_add = "KWR GROUP" if initial_status in ["Booked", "Sold"] else None
+                        query = "INSERT INTO plots (project_id, plot_number, status, customer_name, company_name) VALUES (:proj_id, :p_num, :stat, :c_name, :co_name)"
+                        params = {'proj_id': selected_project_id_admin, 'p_num': new_plot_number, 'stat': initial_status, 'c_name': customer_name_add, 'co_name': company_name_add}
+                        run_query(query, params)
+                        st.success(f"Plot {new_plot_number} added!")
+                        st.rerun()
+
+                st.markdown("---")
+                st.subheader("Delete Plot")
+                plot_to_delete = st.selectbox("Select Plot to Delete", options=plot_numbers_admin, key="delete_select")
+                if st.button("Delete Selected Plot", type="primary"):
+                    if plot_to_delete:
+                        plot_id_to_delete = plot_id_map_admin_plots[plot_to_delete]
+                        run_query("DELETE FROM plots WHERE id = :id", {'id': plot_id_to_delete})
+                        st.warning(f"Plot {plot_to_delete} deleted.")
+                        st.rerun()
 
     # --- User UI ---
     projects_df = get_all_projects()
@@ -253,8 +302,8 @@ else:
                     color = STATUS_COLORS.get(row['status'], "#6c757d")
                     tooltip_content = ""
                     if row['status'] in ["Booked", "Sold"]:
-                        c_name = row['customer_name'] or "N"
-                        co_name = row['company_name'] or "N"
+                        c_name = row['customer_name'] or "N/A"
+                        co_name = row['company_name'] or "N/A"
                         tooltip_content = f"Name: {c_name}<br>Company: {co_name}"
                     
                     if row['status'] in ["Booked", "Sold"]:

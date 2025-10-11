@@ -101,39 +101,6 @@ def login_user(phone, password):
 if 'logged_in_user' not in st.session_state:
     st.session_state.logged_in_user = None
 
-# --- Admin Panel (ALWAYS VISIBLE) ---
-st.sidebar.header("🔑 Admin Panel")
-admin_password = st.sidebar.text_input("Enter Admin Password", type="password", key="admin_pw")
-if admin_password == st.secrets["admin"]["password"]:
-    st.session_state['admin_logged_in'] = True
-elif admin_password:
-    st.sidebar.error("❌ Incorrect password.")
-    if 'admin_logged_in' in st.session_state:
-        del st.session_state.admin_logged_in
-
-# --- Admin Controls (Only if admin is logged in) ---
-if st.session_state.get('admin_logged_in', False):
-    st.sidebar.markdown("---")
-    with st.sidebar.expander("User Management"):
-        st.subheader("Register New User")
-        with st.form("register_form", clear_on_submit=True):
-            new_phone = st.text_input("New User Phone Number")
-            new_password = st.text_input("New User Password", type="password")
-            if st.form_submit_button("Register User"):
-                if new_phone and new_password:
-                    hashed_pw = hash_password(new_password).decode('utf-8')
-                    query = "INSERT INTO users (phone_number, password_hash) VALUES (:phone, :pw_hash)"
-                    if run_query(query, {'phone': new_phone, 'pw_hash': hashed_pw}):
-                        st.success(f"User '{new_phone}' registered successfully!")
-                    else:
-                        st.error("This phone number might already be registered.")
-                else:
-                    st.warning("Phone number and password cannot be empty.")
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Project Management")
-    # ... (Rest of the admin controls for projects and plots)
-
-# --- Main Content Area ---
 if not st.session_state.logged_in_user:
     # --- Login Page ---
     st.title("Login to KWR PLOT MAP")
@@ -143,6 +110,9 @@ if not st.session_state.logged_in_user:
         submitted = st.form_submit_button("Login")
         if submitted:
             login_user(phone, password)
+    st.markdown("---")
+    st.markdown('<div class="footer">BUILD BY <a href="http://www.aiclex.in" target="_blank">AICLEX TECHNOLOGIES</a></div>', unsafe_allow_html=True)
+
 else:
     # --- Main App UI (if user is logged in) ---
     st.sidebar.success(f"Logged in as: {st.session_state.logged_in_user}")
@@ -152,8 +122,118 @@ else:
             del st.session_state.admin_logged_in
         st.rerun()
 
-    st.title("KWR PLOT MAP- BLOCK -A")
+    st.title("KWR PLOT MAP")
+
+    # --- Admin Login ---
+    st.sidebar.header("🔑 Admin Panel")
+    admin_password = st.sidebar.text_input("Enter Admin Password", type="password", key="admin_pw")
+    if admin_password == st.secrets["admin"]["password"]:
+        st.session_state['admin_logged_in'] = True
+    elif admin_password:
+        st.sidebar.error("❌ Incorrect password.")
+        if 'admin_logged_in' in st.session_state:
+            del st.session_state.admin_logged_in
+
+    # --- Admin Controls (Only if admin is logged in) ---
+    if st.session_state.get('admin_logged_in', False):
+        st.sidebar.markdown("---")
+        with st.sidebar.expander("User Management"):
+            st.subheader("Register New User")
+            with st.form("register_form", clear_on_submit=True):
+                new_phone = st.text_input("New User Phone Number")
+                new_password = st.text_input("New User Password", type="password")
+                if st.form_submit_button("Register User"):
+                    if new_phone and new_password:
+                        hashed_pw = hash_password(new_password).decode('utf-8')
+                        query = "INSERT INTO users (phone_number, password_hash) VALUES (:phone, :pw_hash)"
+                        if run_query(query, {'phone': new_phone, 'pw_hash': hashed_pw}):
+                            st.success(f"User '{new_phone}' registered successfully!")
+                        else:
+                            st.error("This phone number might already be registered.")
+                    else:
+                        st.warning("Phone number and password cannot be empty.")
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Project Management")
+        projects_df_admin = get_all_projects()
+        project_names_admin = projects_df_admin['name'].tolist() if not projects_df_admin.empty else []
+        project_id_map_admin = pd.Series(projects_df_admin.id.values, index=projects_df_admin.name).to_dict() if not projects_df_admin.empty else {}
     
+        with st.sidebar.expander("Create New Project"):
+            new_project_name = st.text_input("New Project Name")
+            if st.button("Create Project"):
+                if new_project_name and new_project_name not in project_names_admin:
+                    run_query("INSERT INTO projects (name) VALUES (:name)", {'name': new_project_name})
+                    st.success(f"Project '{new_project_name}' created!")
+                    st.rerun()
+                else:
+                    st.warning("Project name is empty or already exists.")
+
+        st.sidebar.markdown("---")
+        selected_project_admin = st.sidebar.selectbox("Select Project to Manage", options=project_names_admin, index=0 if project_names_admin else None)
+
+        if selected_project_admin:
+            with st.sidebar.expander(f"Delete Project: {selected_project_admin}"):
+                st.warning(f"DANGER ZONE: This will delete the project and all its plots forever.")
+                if st.button("Confirm Deletion of Project"):
+                    project_id_to_delete = project_id_map_admin[selected_project_admin]
+                    run_query("DELETE FROM projects WHERE id = :id", {'id': project_id_to_delete})
+                    st.success(f"Project '{selected_project_admin}' deleted.")
+                    st.rerun()
+
+            st.sidebar.markdown("---")
+            st.sidebar.subheader(f"Manage Plots for: {selected_project_admin}")
+            selected_project_id_admin = project_id_map_admin[selected_project_admin]
+            plots_df_admin = get_plots_for_project(selected_project_id_admin)
+            plot_numbers_admin = plots_df_admin['plot_number'].tolist() if not plots_df_admin.empty else []
+            plot_id_map_admin_plots = pd.Series(plots_df_admin.id.values, index=plots_df_admin.plot_number).to_dict() if not plots_df_admin.empty else {}
+
+            with st.sidebar.expander("Update, Add, or Delete Plots", expanded=True):
+                st.subheader("Update Plot Status")
+                selected_plot_update = st.selectbox("Select Plot to Update", options=plot_numbers_admin, key="update_select")
+                statuses = ["Available", "Booked", "Sold"]
+                new_status = st.selectbox("Select New Status", options=statuses)
+                customer_name_update = ""
+                if new_status in ["Booked", "Sold"]:
+                    customer_name_update = st.text_input("Customer Name", key="update_customer_name")
+                if st.button("Update Status"):
+                    if selected_plot_update:
+                        plot_id_to_update = plot_id_map_admin_plots[selected_plot_update]
+                        company_name_update = "KWR GROUP" if new_status in ["Booked", "Sold"] else ""
+                        query = "UPDATE plots SET status = :status, customer_name = :c_name, company_name = :co_name WHERE id = :id"
+                        params = {'status': new_status, 'c_name': customer_name_update, 'co_name': company_name_update, 'id': plot_id_to_update}
+                        run_query(query, params)
+                        st.success("Plot updated!")
+                        st.rerun()
+                
+                st.markdown("---")
+                st.subheader("Add New Plot")
+                new_plot_number = st.number_input("Enter New Plot Number", min_value=1, step=1)
+                initial_status = st.selectbox("Initial Status", options=statuses, key="add_status")
+                customer_name_add = ""
+                if initial_status in ["Booked", "Sold"]:
+                    customer_name_add = st.text_input("Customer Name", key="add_customer_name")
+                if st.button("Add Plot"):
+                    if new_plot_number in plot_numbers_admin:
+                        st.error(f"Plot {new_plot_number} already exists in this project!")
+                    else:
+                        company_name_add = "KWR GROUP" if initial_status in ["Booked", "Sold"] else None
+                        query = "INSERT INTO plots (project_id, plot_number, status, customer_name, company_name) VALUES (:proj_id, :p_num, :stat, :c_name, :co_name)"
+                        params = {'proj_id': selected_project_id_admin, 'p_num': new_plot_number, 'stat': initial_status, 'c_name': customer_name_add, 'co_name': company_name_add}
+                        run_query(query, params)
+                        st.success(f"Plot {new_plot_number} added!")
+                        st.rerun()
+
+                st.markdown("---")
+                st.subheader("Delete Plot")
+                plot_to_delete = st.selectbox("Select Plot to Delete", options=plot_numbers_admin, key="delete_select")
+                if st.button("Delete Selected Plot"):
+                    if plot_to_delete:
+                        plot_id_to_delete = plot_id_map_admin_plots[plot_to_delete]
+                        run_query("DELETE FROM plots WHERE id = :id", {'id': plot_id_to_delete})
+                        st.warning(f"Plot {plot_to_delete} deleted.")
+                        st.rerun()
+
+    # --- User UI ---
     projects_df = get_all_projects()
     if not projects_df.empty:
         project_names = projects_df['name'].tolist()

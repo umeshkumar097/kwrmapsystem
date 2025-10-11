@@ -3,7 +3,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 # --- पेज का कॉन्फ़िगरेशन ---
-st.set_page_config(page_title="KWR PLOT MAP- Block - A", layout="wide")
+st.set_page_config(page_title="KWR PLOT MAP", layout="wide")
 
 # --- CSS ---
 st.markdown("""
@@ -74,7 +74,7 @@ def get_plots_for_project(project_id):
     return pd.DataFrame()
 
 # --- मुख्य UI ---
-st.title("KWR PLOT MAP")
+st.title("KWR PLOT MAP- BLOCK -A")
 
 # --- एडमिन लॉगइन ---
 st.sidebar.header("🔑 Admin Panel")

@@ -3,7 +3,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 # --- पेज का कॉन्फ़िगरेशन ---
-st.set_page_config(page_title="KWR PLOT MAP", layout="wide")
+st.set_page_config(page_title="KWR PLOT MAP- Block - A", layout="wide")
 
 # --- CSS ---
 st.markdown("""

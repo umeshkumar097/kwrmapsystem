@@ -67,6 +67,7 @@ def get_all_users():
             return pd.DataFrame()
     return pd.DataFrame()
 
+
 @st.cache_data(ttl=60)
 def get_all_projects():
     engine = init_connection()
@@ -151,7 +152,7 @@ else:
     # --- Admin Controls (Only if admin is logged in) ---
     if st.session_state.get('admin_logged_in', False):
         st.sidebar.markdown("---")
-        with st.sidebar.expander("User Management"):
+        with st.sidebar.expander("User Management", expanded=True):
             st.subheader("Register New User")
             with st.form("register_form", clear_on_submit=True):
                 new_phone = st.text_input("New User Phone Number")
@@ -166,16 +167,19 @@ else:
                             st.error("This phone number might already be registered.")
                     else:
                         st.warning("Phone number and password cannot be empty.")
-            
+
             st.markdown("---")
             st.subheader("Manage Existing Users")
             all_users = get_all_users()
             if not all_users.empty:
                 user_to_manage = st.selectbox("Select User", options=all_users['phone_number'])
+                
                 col1, col2 = st.columns(2)
+                
                 with col1:
                     if st.button("Delete User", use_container_width=True):
                         st.session_state.user_to_delete = user_to_manage
+
                 if 'user_to_delete' in st.session_state and st.session_state.user_to_delete == user_to_manage:
                      st.warning(f"Are you sure you want to delete {user_to_manage}?")
                      if st.button("Confirm Deletion", use_container_width=True, type="primary"):
@@ -183,9 +187,11 @@ else:
                         st.success(f"User {user_to_manage} deleted.")
                         del st.session_state.user_to_delete
                         st.rerun()
+
                 with col2:
                      if st.button("Change Password", use_container_width=True):
                         st.session_state.user_to_change_pw = user_to_manage
+                
                 if 'user_to_change_pw' in st.session_state and st.session_state.user_to_change_pw == user_to_manage:
                     with st.form("change_password_form"):
                         new_pw = st.text_input("Enter New Password", type="password")

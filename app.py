@@ -74,7 +74,7 @@ def get_plots_for_project(project_id):
     return pd.DataFrame()
 
 # --- मुख्य UI ---
-st.title("KWR PLOT MAP- BLOCK -A")
+st.title("KWR PLOT MAP- BLOCK -B")
 
 # --- एडमिन लॉगइन ---
 st.sidebar.header("🔑 Admin Panel")

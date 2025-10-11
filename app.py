@@ -139,7 +139,7 @@ else:
             del st.session_state[key]
         st.rerun()
 
-    st.title("KWR PLOT MAP")
+    st.title("KWR PLOT MAP-Block- A")
 
     # --- Admin Controls (Only if admin is logged in) ---
     if st.session_state.is_admin:

@@ -160,6 +160,9 @@ else:
             del st.session_state[key]
         st.rerun()
 
+    # --- THIS IS THE NEW WELCOME MESSAGE ---
+    st.subheader(f"Hi {st.session_state.logged_in_user_name}, welcome 👋")
+
     st.title("KWR PLOT MAP")
 
     # --- Admin Controls (Only if admin is logged in) ---

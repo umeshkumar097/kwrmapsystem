@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
 import bcrypt
+from datetime import datetime, timedelta
 
 # --- Page Configuration ---
 st.set_page_config(page_title="KWR PLOT MAP", layout="wide")
@@ -95,6 +96,23 @@ def get_plots_for_project(project_id):
             return pd.DataFrame()
     return pd.DataFrame()
 
+# --- NEW: Last Seen Functions ---
+def update_last_seen(phone_number):
+    run_query("UPDATE users SET last_seen = NOW() WHERE phone_number = :phone", {'phone': phone_number})
+
+@st.cache_data(ttl=15) # Refresh every 15 seconds
+def get_live_users():
+    engine = init_connection()
+    if engine:
+        try:
+            with engine.connect() as connection:
+                query = text("SELECT phone_number FROM users WHERE last_seen >= NOW() - INTERVAL 1 MINUTE")
+                return pd.read_sql(query, connection)
+        except Exception as e:
+            st.error(f"Failed to fetch live users: {e}")
+            return pd.DataFrame()
+    return pd.DataFrame()
+
 # --- Login Function ---
 def login_user(phone, password):
     if not phone or not password:
@@ -108,6 +126,8 @@ def login_user(phone, password):
             if result and check_password(password, result[0]):
                 st.session_state['logged_in_user'] = phone
                 st.session_state['is_admin'] = bool(result[1])
+                # Update last seen immediately on login
+                update_last_seen(phone)
                 st.rerun()
             else:
                 st.error("Invalid phone number or password.")
@@ -131,6 +151,9 @@ if not st.session_state.logged_in_user:
 
 else:
     # --- Main App UI (if user is logged in) ---
+    # Update user's activity timestamp on every page run
+    update_last_seen(st.session_state.logged_in_user)
+
     st.sidebar.success(f"Logged in as: {st.session_state.logged_in_user}")
     if st.session_state.is_admin:
         st.sidebar.warning("Admin Access Granted")
@@ -145,6 +168,18 @@ else:
     if st.session_state.is_admin:
         st.sidebar.header("🔑 Admin Panel")
         st.sidebar.markdown("---")
+        
+        with st.sidebar.expander("Live User Status"):
+            live_users_df = get_live_users()
+            if not live_users_df.empty:
+                st.write("Currently Active Users:")
+                for user in live_users_df['phone_number']:
+                    st.write(f"- {user}")
+            else:
+                st.write("No users are currently active.")
+            if st.button("Refresh Status"):
+                st.rerun()
+        
         with st.sidebar.expander("User Management"):
             st.subheader("Register New User")
             with st.form("register_form", clear_on_submit=True):

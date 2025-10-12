@@ -61,7 +61,7 @@ def get_all_users():
     if engine:
         try:
             with engine.connect() as connection:
-                return pd.read_sql("SELECT id, phone_number FROM users ORDER BY phone_number;", connection)
+                return pd.read_sql("SELECT id, name, phone_number FROM users ORDER BY name;", connection)
         except Exception as e:
             st.error(f"Failed to fetch users: {e}")
             init_connection.clear()
@@ -96,20 +96,19 @@ def get_plots_for_project(project_id):
             return pd.DataFrame()
     return pd.DataFrame()
 
-# --- NEW: Last Seen Functions ---
+# --- Last Seen Functions ---
 def update_last_seen(phone_number):
     run_query("UPDATE users SET last_seen = NOW() WHERE phone_number = :phone", {'phone': phone_number})
 
-@st.cache_data(ttl=15) # Refresh every 15 seconds
+@st.cache_data(ttl=15)
 def get_live_users():
     engine = init_connection()
     if engine:
         try:
             with engine.connect() as connection:
-                query = text("SELECT phone_number FROM users WHERE last_seen >= NOW() - INTERVAL 1 MINUTE")
+                query = text("SELECT name, phone_number FROM users WHERE last_seen >= NOW() - INTERVAL 1 MINUTE")
                 return pd.read_sql(query, connection)
-        except Exception as e:
-            st.error(f"Failed to fetch live users: {e}")
+        except Exception:
             return pd.DataFrame()
     return pd.DataFrame()
 
@@ -121,23 +120,23 @@ def login_user(phone, password):
     engine = init_connection()
     if engine:
         with engine.connect() as connection:
-            query = text("SELECT password_hash, is_admin FROM users WHERE phone_number = :phone")
+            query = text("SELECT name, password_hash, is_admin FROM users WHERE phone_number = :phone")
             result = connection.execute(query, {'phone': phone}).fetchone()
-            if result and check_password(password, result[0]):
-                st.session_state['logged_in_user'] = phone
-                st.session_state['is_admin'] = bool(result[1])
-                # Update last seen immediately on login
+            if result and check_password(password, result[1]):
+                st.session_state['logged_in_user_name'] = result[0] or phone
+                st.session_state['logged_in_user_phone'] = phone
+                st.session_state['is_admin'] = bool(result[2])
                 update_last_seen(phone)
                 st.rerun()
             else:
                 st.error("Invalid phone number or password.")
 
 # --- Main App Logic ---
-if 'logged_in_user' not in st.session_state:
-    st.session_state.logged_in_user = None
+if 'logged_in_user_phone' not in st.session_state:
+    st.session_state.logged_in_user_phone = None
     st.session_state.is_admin = False
 
-if not st.session_state.logged_in_user:
+if not st.session_state.logged_in_user_phone:
     # --- Login Page ---
     st.title("Login to KWR PLOT MAP")
     with st.form("login_form"):
@@ -151,10 +150,9 @@ if not st.session_state.logged_in_user:
 
 else:
     # --- Main App UI (if user is logged in) ---
-    # Update user's activity timestamp on every page run
-    update_last_seen(st.session_state.logged_in_user)
+    update_last_seen(st.session_state.logged_in_user_phone)
 
-    st.sidebar.success(f"Logged in as: {st.session_state.logged_in_user}")
+    st.sidebar.success(f"Logged in as: {st.session_state.logged_in_user_name}")
     if st.session_state.is_admin:
         st.sidebar.warning("Admin Access Granted")
     if st.sidebar.button("Logout"):
@@ -162,7 +160,7 @@ else:
             del st.session_state[key]
         st.rerun()
 
-    st.title("KWR PLOT MAP-Block- A")
+    st.title("KWR PLOT MAP")
 
     # --- Admin Controls (Only if admin is logged in) ---
     if st.session_state.is_admin:
@@ -173,8 +171,9 @@ else:
             live_users_df = get_live_users()
             if not live_users_df.empty:
                 st.write("Currently Active Users:")
-                for user in live_users_df['phone_number']:
-                    st.write(f"- {user}")
+                for index, user in live_users_df.iterrows():
+                    display_name = user['name'] or user['phone_number']
+                    st.write(f"- {display_name}")
             else:
                 st.write("No users are currently active.")
             if st.button("Refresh Status"):
@@ -183,46 +182,52 @@ else:
         with st.sidebar.expander("User Management"):
             st.subheader("Register New User")
             with st.form("register_form", clear_on_submit=True):
+                new_name = st.text_input("New User's Name")
                 new_phone = st.text_input("New User Phone Number")
                 new_password = st.text_input("New User Password", type="password")
                 is_admin_checkbox = st.checkbox("Make this user an admin")
                 if st.form_submit_button("Register User"):
-                    if new_phone and new_password:
+                    if new_phone and new_password and new_name:
                         hashed_pw = hash_password(new_password).decode('utf-8')
-                        query = "INSERT INTO users (phone_number, password_hash, is_admin) VALUES (:phone, :pw_hash, :is_admin)"
-                        params = {'phone': new_phone, 'pw_hash': hashed_pw, 'is_admin': is_admin_checkbox}
+                        query = "INSERT INTO users (name, phone_number, password_hash, is_admin) VALUES (:name, :phone, :pw_hash, :is_admin)"
+                        params = {'name': new_name, 'phone': new_phone, 'pw_hash': hashed_pw, 'is_admin': is_admin_checkbox}
                         if run_query(query, params):
-                            st.success(f"User '{new_phone}' registered successfully!")
+                            st.success(f"User '{new_name}' registered successfully!")
                         else:
                             st.error("This phone number might already be registered.")
                     else:
-                        st.warning("Phone and password cannot be empty.")
+                        st.warning("Name, phone, and password cannot be empty.")
             
             st.markdown("---")
             st.subheader("Manage Existing Users")
             all_users = get_all_users()
             if not all_users.empty:
-                user_to_manage = st.selectbox("Select User", options=all_users['phone_number'])
+                all_users['display'] = all_users.apply(lambda row: f"{row['name']} ({row['phone_number']})", axis=1)
+                user_display_to_manage = st.selectbox("Select User", options=all_users['display'])
+                
+                selected_phone = all_users[all_users['display'] == user_display_to_manage]['phone_number'].iloc[0]
+
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("Delete User", use_container_width=True, type="primary"):
-                         if user_to_manage == 'admin':
-                             st.error("The default admin user cannot be deleted.")
-                         else:
-                            run_query("DELETE FROM users WHERE phone_number = :phone", {'phone': user_to_manage})
-                            st.success(f"User {user_to_manage} deleted.")
+                        if selected_phone == 'admin':
+                            st.error("The default admin user cannot be deleted.")
+                        else:
+                            run_query("DELETE FROM users WHERE phone_number = :phone", {'phone': selected_phone})
+                            st.success(f"User {selected_phone} deleted.")
                             st.rerun()
                 with col2:
-                     if st.button("Change Password", use_container_width=True):
-                        st.session_state.user_to_change_pw = user_to_manage
-                if 'user_to_change_pw' in st.session_state and st.session_state.user_to_change_pw == user_to_manage:
+                    if st.button("Change Password", use_container_width=True):
+                        st.session_state.user_to_change_pw = selected_phone
+                
+                if 'user_to_change_pw' in st.session_state and st.session_state.user_to_change_pw == selected_phone:
                     with st.form("change_password_form"):
                         new_pw = st.text_input("Enter New Password", type="password")
                         if st.form_submit_button("Update Password"):
                             if new_pw:
                                 hashed_pw = hash_password(new_pw).decode('utf-8')
-                                run_query("UPDATE users SET password_hash = :pw_hash WHERE phone_number = :phone", {'pw_hash': hashed_pw, 'phone': user_to_manage})
-                                st.success(f"Password for {user_to_manage} updated.")
+                                run_query("UPDATE users SET password_hash = :pw_hash WHERE phone_number = :phone", {'pw_hash': hashed_pw, 'phone': selected_phone})
+                                st.success(f"Password for {selected_phone} updated.")
                                 del st.session_state.user_to_change_pw
                             else:
                                 st.warning("Password cannot be empty.")
@@ -236,6 +241,7 @@ else:
         project_id_map_admin = pd.Series(projects_df_admin.id.values, index=projects_df_admin.name).to_dict() if not projects_df_admin.empty else {}
     
         with st.sidebar.expander("Manage Projects"):
+            st.subheader("Create New Project")
             new_project_name = st.text_input("New Project Name")
             if st.button("Create Project"):
                 if new_project_name and new_project_name not in project_names_admin:
@@ -244,13 +250,26 @@ else:
                     st.rerun()
                 else:
                     st.warning("Project name is empty or already exists.")
+            
             st.markdown("---")
-            project_to_delete_name = st.selectbox("Select Project to Delete", options=project_names_admin)
-            if st.button("Delete Project", type="primary"):
-                if project_to_delete_name:
-                    project_id_to_delete = project_id_map_admin[project_to_delete_name]
+            st.subheader("Edit or Delete Project")
+            project_to_manage_name = st.selectbox("Select Project", options=project_names_admin)
+            
+            if project_to_manage_name:
+                new_name_for_edit = st.text_input("Enter new name to update", value=project_to_manage_name)
+                if st.button("Update Name"):
+                    if new_name_for_edit and new_name_for_edit != project_to_manage_name:
+                        project_id_to_edit = project_id_map_admin[project_to_manage_name]
+                        run_query("UPDATE projects SET name = :new_name WHERE id = :id", {'new_name': new_name_for_edit, 'id': project_id_to_edit})
+                        st.success(f"Project name updated to '{new_name_for_edit}'!")
+                        st.rerun()
+                    else:
+                        st.warning("New name is empty or same as the old name.")
+
+                if st.button("Delete Project", type="primary"):
+                    project_id_to_delete = project_id_map_admin[project_to_manage_name]
                     run_query("DELETE FROM projects WHERE id = :id", {'id': project_id_to_delete})
-                    st.success(f"Project '{project_to_delete_name}' deleted.")
+                    st.success(f"Project '{project_to_manage_name}' deleted.")
                     st.rerun()
 
         st.sidebar.markdown("---")

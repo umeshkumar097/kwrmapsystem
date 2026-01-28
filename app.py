@@ -316,4 +316,63 @@ else:
                         company_name_add = "KWR GROUP" if initial_status in ["Booked", "Sold"] else None
                         query = "INSERT INTO plots (project_id, plot_number, status, customer_name, company_name) VALUES (:proj_id, :p_num, :stat, :c_name, :co_name)"
                         params = {'proj_id': selected_project_id_admin, 'p_num': new_plot_number, 'stat': initial_status, 'c_name': customer_name_add, 'co_name': company_name_add}
-                        run_query(query,
+                        run_query(query, params)
+                        st.success(f"Plot {new_plot_number} added!")
+                        st.rerun()
+
+                st.markdown("---")
+                st.subheader("Delete Plot")
+                plot_to_delete = st.selectbox("Select Plot to Delete", options=plot_numbers_admin, key="delete_select")
+                if st.button("Delete Selected Plot", type="primary"):
+                    if plot_to_delete:
+                        plot_id_to_delete = plot_id_map_admin_plots[plot_to_delete]
+                        run_query("DELETE FROM plots WHERE id = :id", {'id': plot_id_to_delete})
+                        st.warning(f"Plot {plot_to_delete} deleted.")
+                        st.rerun()
+
+    # --- User UI ---
+    projects_df = get_all_projects()
+    if not projects_df.empty:
+        project_names = projects_df['name'].tolist()
+        project_id_map = pd.Series(projects_df.id.values, index=projects_df.name).to_dict()
+        selected_project_name = st.selectbox("Select a Project to View", options=project_names)
+        
+        st.markdown("""
+        <div style="display: flex; justify-content: center; align-items: center; gap: 20px; padding: 10px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; margin: 15px 0;">
+            <div style="display: flex; align-items: center;"><div style="width:20px; height:20px; background-color:#28a745; border-radius:3px; margin-right: 8px;"></div><b>Available</b></div>
+            <div style="display: flex; align-items: center;"><div style="width:20px; height:20px; background-color:#ffc107; border-radius:3px; margin-right: 8px;"></div><b>Booked</b></div>
+            <div style="display: flex; align-items: center;"><div style="width:20px; height:20px; background-color:#dc3545; border-radius:3px; margin-right: 8px;"></div><b>Sold</b></div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if selected_project_name:
+            selected_project_id = project_id_map[selected_project_name]
+            plots_df = get_plots_for_project(selected_project_id)
+            st.subheader(f"Plot Availability for: {selected_project_name}")
+            
+            if plots_df.empty:
+                st.info("No plots found for this project.")
+            else:
+                STATUS_COLORS = {"Available": "#28a745", "Booked": "#ffc107", "Sold": "#dc3545"}
+                html_plots = []
+                for index, row in plots_df.iterrows():
+                    color = STATUS_COLORS.get(row['status'], "#6c757d")
+                    tooltip_content = ""
+                    if row['status'] in ["Booked", "Sold"]:
+                        c_name = row['customer_name'] or "N/A"
+                        co_name = row['company_name'] or "N/A"
+                        tooltip_content = f"Name: {c_name}<br>Company: {co_name}"
+                    
+                    if row['status'] in ["Booked", "Sold"]:
+                        plot_html = f'<div class="plot-box" style="background-color: {color};">{row.plot_number}<span class="tooltiptext">{tooltip_content}</span></div>'
+                        html_plots.append(plot_html)
+                    else:
+                        html_plots.append(f'<div class="plot-box" style="background-color: {color};">{row.plot_number}</div>')
+
+                st.markdown(f'<div class="plot-grid-container">{"".join(html_plots)}</div>', unsafe_allow_html=True)
+    else:
+        st.info("No projects found. Please add a project from the Admin Panel if you are an admin.")
+
+    # --- Footer ---
+    st.markdown("---")
+    st.markdown('<div class="footer">BUILD BY <a href="http://www.aiclex.in" target="_blank">AICLEX TECHNOLOGIES</a></div>', unsafe_allow_html=True)

@@ -12,7 +12,10 @@ st.markdown("""
 <style>
 .plot-box { 
   position: relative; 
-  padding: 14px 5px; 
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 6px; 
   color: #ffffff; 
   text-align: center; 
@@ -21,13 +24,9 @@ st.markdown("""
   cursor: default; 
   box-shadow: 0 2px 6px rgba(0,0,0,0.18); 
   border: 1px solid rgba(255,255,255,0.35);
+  overflow: hidden;
 }
-.plot-grid-container { 
-  display: grid; 
-  grid-template-columns: repeat(10, 1fr); 
-  gap: 10px; 
-  padding: 10px 0; 
-}
+
 
 </style>
 """, unsafe_allow_html=True)

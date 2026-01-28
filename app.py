@@ -10,12 +10,19 @@ st.set_page_config(page_title="KWR PLOT MAP", layout="wide")
 # --- CSS ---
 st.markdown("""
 <style>
-.plot-grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px; padding: 10px 0; }
-.plot-box { position: relative; padding: 15px 5px; border-radius: 8px; color: white; text-align: center; font-size: 20px; font-weight: bold; cursor: default; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); }
-.plot-box .tooltiptext { visibility: hidden; width: 200px; background-color: #555; color: #fff; text-align: left; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; font-size: 14px; font-weight: normal; }
-.plot-box:hover .tooltiptext, .plot-box:active .tooltiptext { visibility: visible; opacity: 1; }
-.footer { text-align: center; padding: 20px 0; color: #888; }
-.footer a { color: #007bff; text-decoration: none; }
+.plot-box { 
+  position: relative; 
+  padding: 14px 5px; 
+  border-radius: 6px; 
+  color: #ffffff; 
+  text-align: center; 
+  font-size: 18px; 
+  font-weight: 600; 
+  cursor: default; 
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18); 
+  border: 1px solid rgba(255,255,255,0.35);
+}
+
 </style>
 """, unsafe_allow_html=True)
 

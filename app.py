@@ -26,6 +26,26 @@ st.markdown("""
   border: 1px solid rgba(255,255,255,0.35);
   overflow: hidden;
 }
+.plot-box .tooltiptext { 
+  visibility: hidden; 
+  min-width: 220px;
+  background: #2f2f2f;
+  color: #fff; 
+  text-align: left; 
+  border-radius: 8px; 
+  padding: 10px 14px; 
+  position: absolute; 
+  z-index: 999;
+  bottom: 130%; 
+  left: 50%; 
+  transform: translateX(-50%);
+  opacity: 0; 
+  transition: opacity 0.2s ease;
+  font-size: 14px; 
+  font-weight: 500; 
+  line-height: 1.4;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
 
 
 </style>

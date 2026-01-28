@@ -22,6 +22,12 @@ st.markdown("""
   box-shadow: 0 2px 6px rgba(0,0,0,0.18); 
   border: 1px solid rgba(255,255,255,0.35);
 }
+.plot-grid-container { 
+  display: grid; 
+  grid-template-columns: repeat(10, 1fr); 
+  gap: 10px; 
+  padding: 10px 0; 
+}
 
 </style>
 """, unsafe_allow_html=True)

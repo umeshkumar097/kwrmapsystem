@@ -10,15 +10,15 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- CSS ----------------
+# --- CSS ---
 st.markdown("""
 <style>
-.plot-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:10px}
-.plot {padding:15px;border-radius:8px;color:white;font-weight:bold;text-align:center}
-.Available{background:#28a745}
-.Booked{background:#ffc107;color:black}
-.Sold{background:#dc3545}
-.footer{text-align:center;color:#777;margin-top:30px}
+.plot-grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px; padding: 10px 0; }
+.plot-box { position: relative; padding: 15px 5px; border-radius: 8px; color: white; text-align: center; font-size: 20px; font-weight: bold; cursor: default; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); }
+.plot-box .tooltiptext { visibility: hidden; width: 200px; background-color: #555; color: #fff; text-align: left; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; font-size: 14px; font-weight: normal; }
+.plot-box:hover .tooltiptext, .plot-box:active .tooltiptext { visibility: visible; opacity: 1; }
+.footer { text-align: center; padding: 20px 0; color: #888; }
+.footer a { color: #007bff; text-decoration: none; }
 </style>
 """, unsafe_allow_html=True)
 

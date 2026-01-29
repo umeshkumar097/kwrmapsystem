@@ -3,4 +3,3 @@ pandas
 SQLAlchemy
 PyMySQL
 bcrypt
-python-3.11
